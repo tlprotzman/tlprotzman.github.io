@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+        <title>Fixing the Nanomine Unit tests</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/katex.min.css" integrity="sha384-9eLZqc9ds8eNjO3TmqPeYcDj8n+Qfa4nuSiGYa6DjLNcv9BtN69ZIulL9+8CqC9Y" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+        <link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+    </head>
+    <body>
+        <h1 id="fixing-the-nanomine-unit-tests">Fixing the Nanomine Unit tests</h1>
+<p>Here are the steps I took to debug the unit test and get it to a working state</p>
+<ul>
+<li>Fixing the issue with <code>with</code>.
+<ul>
+<li>There was an issue in <code>setlr/init.read_xml(...)</code> where it tries to open a resource using <code>with</code>, but the appropriate functions for this don't exist.</li>
+<li>To fix this, we add two function to the class <code>setlr/__init__.FileLikeFromIter</code></li>
+<li>We need to add the <code>__enter__</code> and <code>__exit__</code> function</li>
+</ul>
+<pre><code class="language-python"><div><span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">__enter__</span><span class="hljs-params">(self)</span>:</span>
+    <span class="hljs-keyword">return</span> self
+
+<span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">__exit__</span><span class="hljs-params">(self, err_type, value, traceback)</span>:</span>
+    <span class="hljs-keyword">pass</span>
+</div></code></pre>
+<ul>
+<li>Adding these two functions should let it progress past crashing at <code>with</code></li>
+</ul>
+</li>
+<li>Reading the file into <code>etree.iterparse</code>
+<ul>
+<li>For some reason, the <code>FileLikeFromIter</code> object isn't properly read into <code>etree.iterparse</code> in <code>setlr.iterparse_filter()</code></li>
+<li>This fix is pretty convoluted at the moment and doesn't seem particularly consistent, but it worked for me</li>
+<li>I'm working on tracing the issue and coming up with a nicer solution</li>
+<li>In <code>iterparse_filter.parse(...)</code>, I added the following lines:</li>
+</ul>
+<pre><code class="language-python"><div>    ...
+    before = <span class="hljs-literal">None</span>
+    xml_str = io.BytesIO(file.read())
+    xml_str = xml_str[xml_str.find(<span class="hljs-string">"xml_str"</span>) + <span class="hljs-number">52</span>:<span class="hljs-number">-4</span>]
+    <span class="hljs-keyword">for</span> (event, ele) <span class="hljs-keyword">in</span> etree.iterparse(xml_str, needed_actions, **kwargs):
+        <span class="hljs-keyword">if</span> event == <span class="hljs-string">"start"</span>:
+    ...
+</div></code></pre>
+<ul>
+<li>This code is around line 400 or so</li>
+<li>Like I said, not very good and probably only works for this case, but I'm working on adapting it to work generally</li>
+</ul>
+</li>
+<li>Also, I needed to fix an issue with <code>future/standard_library</code>
+<ul>
+<li>I commented out two lines in <code>/future/standard-library/__init__.py</code><pre><code class="language-python"><div><span class="hljs-comment"># ('subprocess', 'getoutput', 'commands', 'getoutput'),</span>
+<span class="hljs-comment"># ('subprocess', 'getstatusoutput', 'commands', 'getstatusoutput'),</span>
+</div></code></pre>
+<ul>
+<li>It's not a great solution, but it lets us move past it</li>
+<li><a href="https://github.com/PythonCharmers/python-future/issues/174">Known issue</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Finally, I had to make one last change, though this one seems pretty dependent on what versions are being used
+<ul>
+<li>In <code>setlr</code>, by not specifying <code>dtype=object</code> at <code>__init__.py@read_csv</code> and letting pandas determine the type automatically it seems to run, not sure if this will be an issue later but it shouldn't be?</li>
+</ul>
+</li>
+</ul>
+
+    </body>
+    </html>
