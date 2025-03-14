@@ -1,0 +1,10 @@
+main:
+  - title: "About"
+    url: /about/
+  - title: "Research"
+    url: /research/
+  - title: "Photography"
+    url: /photography/
+  - title: "Posts"
+    url: /posts/
+  
